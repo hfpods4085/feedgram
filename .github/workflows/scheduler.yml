@@ -1,0 +1,46 @@
+---
+name: Schedule
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/scheduler.yml
+      - src/scheduler.py
+      - src/github.py
+      - environment.yml
+  schedule:
+    - cron: 0 * * * *
+
+permissions: write-all
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mamba-org/setup-micromamba@v1
+        name: Setup micromamba environment
+        with:
+          micromamba-version: latest
+          environment-file: environment.yml
+          environment-name: ci
+          cache-environment: true
+          cache-downloads: false
+          log-level: info
+
+      - name: Sync
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RSSHUB_URL: ${{ secrets.RSSHUB_URL }}
+        shell: micromamba-shell {0}
+        run: |-
+          gh release download data -D data --clobber
+          python src/scheduler.py
